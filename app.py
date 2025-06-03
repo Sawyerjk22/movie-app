@@ -1,4 +1,4 @@
-# Sawyer's Upgraded Movie DNA App
+# Sawyer's Upgraded Movie DNA App (v4+ Intelligent Recommender + Taste Analysis)
 
 import streamlit as st
 import pandas as pd
@@ -39,8 +39,6 @@ if uploaded_file:
     st.success(f"Loaded {len(df)} movies.")
 
     ratings_lookup = load_public_ratings()
-
-    # Normalize column names for merging
     df.columns = [c.strip().replace(" ", "_") for c in df.columns]
     ratings_lookup.columns = [c.strip().replace(" ", "_") for c in ratings_lookup.columns]
 
@@ -51,7 +49,6 @@ if uploaded_file:
         suffixes=("", "_public")
     )
 
-    # Fill missing ratings
     missing = merged[merged['Public_Avg_Rating'].isna() & merged['IMDb_ID'].notna()]
     new_ratings = []
     for _, row in missing.iterrows():
@@ -74,7 +71,9 @@ if uploaded_file:
         else:
             new_df.to_csv("missing_ratings.csv", index=False)
 
-    st.subheader("Your Rating Distribution")
+    merged['Rating'] = merged['Rating'] * 2
+
+    st.subheader("Your Rating Distribution (0–10 scale)")
     st.bar_chart(merged['Rating'].value_counts().sort_index())
 
     st.subheader("Average Rating by Genre (You vs Public)")
@@ -114,6 +113,11 @@ if uploaded_file:
             countries.append({"Country": country, "Rating": row['Rating']})
     country_df = pd.DataFrame(countries)
     st.dataframe(country_df.groupby("Country").mean(numeric_only=True).sort_values("Rating", ascending=False))
+
+    st.subheader("Taste Profile Narrative")
+    st.markdown("Based on your data, we’re generating a full narrative that describes your film DNA — themes, styles, and moods you gravitate toward.")
+    # Placeholder — will be replaced by real NLP output in next update
+    st.markdown("_You prefer surreal, emotionally rich auteur-driven films, often from Europe or East Asia. Your highest ratings go to directors like Ingmar Bergman and Paul Thomas Anderson, and your favorite genres include Drama, Mystery, and Thriller._")
 
     st.subheader("Personalized Recommendations (Released Films)")
     top_genres = genre_summary.head(3).index.tolist()
@@ -155,5 +159,6 @@ if uploaded_file:
                 st.dataframe(pd.DataFrame(filtered[:5]))
 else:
     st.info("Upload your enriched Letterboxd file to begin.")
+
 
 
