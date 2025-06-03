@@ -5,7 +5,7 @@ import requests
 TMDB_API_KEY = "a1d765178f442e9b0677b32ac19d9c68"
 
 def build_taste_profile(df, top_n=30):
-    top_rated = df.sort_values(by='Your Rating', ascending=False).head(top_n)
+    top_rated = df.sort_values(by='Rating', ascending=False).head(top_n)
     genre_prefs = top_rated['Genres'].str.split(', ').explode().value_counts().index.tolist()
     director_prefs = top_rated['Director'].str.split(', ').explode().value_counts().index.tolist()
     actor_prefs = top_rated['Cast'].str.split(', ').explode().value_counts().index.tolist()
@@ -32,9 +32,9 @@ if uploaded_file:
     director_counts = df['Director'].str.split(', ').explode().value_counts()
     st.dataframe(director_counts.head(10))
 
-    if 'Your Rating' in df.columns:
+    if 'Rating' in df.columns:
         st.subheader("Your Top-Rated Films")
-        st.dataframe(df.sort_values('Your Rating', ascending=False).head(10)[['Name', 'Year', 'Your Rating', 'Genres', 'Director']])
+        st.dataframe(df.sort_values('Rating', ascending=False).head(10)[['Name', 'Year', 'Rating', 'Genres', 'Director']])
 
     # === Personalized Recommendations ===
     st.subheader("Monthly Recommendations (Demo)")
