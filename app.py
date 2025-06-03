@@ -40,6 +40,10 @@ if uploaded_file:
 
     ratings_lookup = load_public_ratings()
 
+    # Normalize column names for merging
+    df.columns = [c.strip().replace(" ", "_") for c in df.columns]
+    ratings_lookup.columns = [c.strip().replace(" ", "_") for c in ratings_lookup.columns]
+
     merged = df.merge(
         ratings_lookup,
         on=["IMDb_ID"],
@@ -48,7 +52,7 @@ if uploaded_file:
     )
 
     # Fill missing ratings
-    missing = merged[merged['Public Avg Rating'].isna() & merged['IMDb_ID'].notna()]
+    missing = merged[merged['Public_Avg_Rating'].isna() & merged['IMDb_ID'].notna()]
     new_ratings = []
     for _, row in missing.iterrows():
         rating, tmdb_id = get_tmdb_rating(row['IMDb_ID'])
@@ -60,7 +64,7 @@ if uploaded_file:
                 "Year": row['Year'],
                 "Public Avg Rating": rating
             })
-            merged.loc[row.name, 'Public Avg Rating'] = rating
+            merged.loc[row.name, 'Public_Avg_Rating'] = rating
         sleep(0.25)
 
     if new_ratings:
@@ -82,7 +86,7 @@ if uploaded_file:
             genre_rows.append({
                 "Genre": genre,
                 "Your Rating": row['Rating'],
-                "Public Rating": row['Public Avg Rating']
+                "Public Rating": row['Public_Avg_Rating']
             })
     genre_df = pd.DataFrame(genre_rows)
     genre_summary = genre_df.groupby("Genre").agg({"Your Rating": "mean", "Public Rating": "mean"}).round(2)
@@ -151,4 +155,5 @@ if uploaded_file:
                 st.dataframe(pd.DataFrame(filtered[:5]))
 else:
     st.info("Upload your enriched Letterboxd file to begin.")
+
 
