@@ -40,6 +40,28 @@ def score_decade(year):
         return int(y // 10 * 10)
     except:
         return None
+def generate_taste_profile(merged, genre_summary, top_dirs, decade_scores):
+    top_genres = genre_summary.sort_values("Your Rating", ascending=False).head(3).index.tolist()
+    top_decades = sorted(decade_scores.items(), key=lambda x: -x[1])[:2]
+    top_director_names = top_dirs.head(3).index.tolist()
+
+    parts = []
+    if top_genres:
+        parts.append(f"You gravitate toward genres like **{', '.join(top_genres)}**.")
+    if top_decades:
+        parts.append("You especially enjoy films from the " + " and ".join([f"**{int(d)}s**" for d, _ in top_decades]) + ".")
+    if top_director_names:
+        parts.append("Your highest-rated directors include " + ", ".join([f"**{d}**" for d in top_director_names]) + ".")
+    rt_mean = merged['Runtime'].mean()
+    if rt_mean >= 120:
+        parts.append("You don’t mind long runtimes — many of your favorites run over 2 hours.")
+    elif rt_mean <= 90:
+        parts.append("You prefer leaner films — under 90 minutes tends to score best for you.")
+    else:
+        parts.append("You're flexible on runtime, but seem to favor quality over length.")
+
+    return " ".join(parts)
+
 
 if uploaded_file:
     df = pd.read_excel(uploaded_file) if uploaded_file.name.endswith("xlsx") else pd.read_csv(uploaded_file)
@@ -112,9 +134,11 @@ if uploaded_file:
     agg = country_df.groupby("Country").agg({"Rating": "mean", "Director": pd.Series.nunique, "Country": "count"}).rename(columns={"Director": "# Unique Directors", "Country": "# Films"})
     agg = agg[(agg["# Films"] >= 3) & (agg["# Unique Directors"] >= 2)]
     st.dataframe(agg.sort_values("Rating", ascending=False).round(2))
+    
+st.subheader("Taste Profile Narrative")
+taste_summary = generate_taste_profile(merged, genre_summary, top_dirs, decade_scores)
+st.markdown(taste_summary)
 
-    st.subheader("Taste Profile Narrative")
-    st.markdown("_You favor slow, existential, and emotionally complex films — especially dramas and thrillers from the 60s, 70s, and 2010s. Your top directors tend to be auteurs with strong visual and thematic signatures. Runtime doesn’t bother you — long, challenging cinema gets higher ratings from you than average._")
 
     st.subheader("🎯 Smart Recommendations (Scored + Explained)")
     top_genres = genre_summary.head(3).index.tolist()
