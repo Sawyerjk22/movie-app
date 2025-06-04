@@ -288,8 +288,8 @@ else:
             if filtered:
                 st.markdown(f"**Upcoming {genre}**")
                 st.dataframe(pd.DataFrame(filtered[:10]))
-else:
-    st.info("Upload your enriched Letterboxd file to begin.")
+        else:
+         st.info("Upload your enriched Letterboxd file to begin.")
 
 
 
