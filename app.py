@@ -143,9 +143,6 @@ if uploaded_file:
     top_dirs = top_dirs[top_dirs["# Films"] >= 2].sort_values("Avg Rating", ascending=False)
     st.dataframe(top_dirs.round(2))
 
-    st.subheader("Runtime Preference Buckets")
-    runtime_bins = pd.cut(merged['Runtime'], bins=[0, 90, 120, 180, 1000], labels=['<90', '90-120', '120-180', '180+'])
-    st.bar_chart(merged.groupby(runtime_bins)['Rating'].mean().dropna())
 
     st.subheader("Country Preference (min 3 films, ≥2 directors)")
     countries = []
@@ -161,8 +158,12 @@ st.subheader("Taste Profile Narrative")
 taste_summary = generate_taste_profile(merged, genre_summary, top_dirs, decade_scores)
 st.markdown(taste_summary)
 
+st.markdown("## 🎛️ Recommendation Filters")
 
-st.subheader("🎯 Smart Recommendations (Released Films)")
+min_rating = st.slider("Minimum Public Rating (out of 5)", 0.0, 5.0, 3.5, 0.1)
+max_year = st.slider("Latest Release Year", 1950, TODAY.year, TODAY.year)
+
+st.markdown("## 🎯 Smart Recommendations (Released Films)")
 
 seen = set(merged['Name'].str.lower())
 scored_recs = []
@@ -187,7 +188,7 @@ for gid in genre_ids:
         title = m.get("title", "").strip()
         if not title or title.lower() in seen:
             continue
-        if not m.get("release_date"):
+        if not m.get("release_date") or int(m["release_date"][:4]) > max_year or float(m["vote_average"] or 0) / 2 < min_rating:
             continue
         year = int(m["release_date"][:4])
         decade = score_decade(year)
@@ -212,7 +213,8 @@ for gid in genre_ids:
 if scored_recs:
     rec_df = pd.DataFrame(scored_recs).drop_duplicates("Title")
     rec_df = rec_df.sort_values("Public Rating", ascending=False).head(50)
-    st.dataframe(rec_df)
+    st.dataframe(rec_df.reset_index(drop=True), use_container_width=True, height=600)
+
 else:
     st.info("No solid recs found — try uploading a bigger log file.")
 
