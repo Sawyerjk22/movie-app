@@ -71,7 +71,7 @@ if uploaded_file:
         else:
             new_df.to_csv("missing_ratings.csv", index=False)
 
-    merged['Rating'] = merged['Rating'] * 2
+    merged['Public_Avg_Rating'] = merged['Public_Avg_Rating'] / 2
     merged['Decade'] = merged['Year'].apply(score_decade)
 
     st.subheader("Your Rating Distribution (0–10 scale)")
