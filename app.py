@@ -230,9 +230,9 @@ if uploaded_file:
     top_genres = genre_summary.sort_values("Your Rating", ascending=False).head(5).index.tolist()
     genre_ids = [GENRE_NAME_TO_ID.get(g) for g in top_genres if GENRE_NAME_TO_ID.get(g)]
 
-   scored_recs = []
-seen = set(merged['Name'].str.lower())
-user_decades = set(decade_scores.keys())
+    scored_recs = []
+       seen = set(merged['Name'].str.lower())
+       user_decades = set(decade_scores.keys())
 
 for gid in genre_ids:
     url = "https://api.themoviedb.org/3/discover/movie"
