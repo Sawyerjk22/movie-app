@@ -40,6 +40,7 @@ def score_decade(year):
         return int(y // 10 * 10)
     except:
         return None
+
 def generate_taste_profile(merged, genre_summary, top_dirs, decade_scores):
     top_genres = genre_summary.sort_values("Your Rating", ascending=False).head(3).index.tolist()
     top_decades = sorted(decade_scores.items(), key=lambda x: -x[1])[:2]
@@ -83,7 +84,6 @@ GENRE_NAME_TO_ID = {
     "War": 10752,
     "Western": 37
 }
-
 
 if uploaded_file:
     df = pd.read_excel(uploaded_file) if uploaded_file.name.endswith("xlsx") else pd.read_csv(uploaded_file)
@@ -143,7 +143,6 @@ if uploaded_file:
     top_dirs = top_dirs[top_dirs["# Films"] >= 2].sort_values("Avg Rating", ascending=False)
     st.dataframe(top_dirs.round(2))
 
-
     st.subheader("Country Preference (min 3 films, ≥2 directors)")
     countries = []
     for _, row in merged.iterrows():
@@ -153,96 +152,89 @@ if uploaded_file:
     agg = country_df.groupby("Country").agg({"Rating": "mean", "Director": pd.Series.nunique, "Country": "count"}).rename(columns={"Director": "# Unique Directors", "Country": "# Films"})
     agg = agg[(agg["# Films"] >= 3) & (agg["# Unique Directors"] >= 2)]
     st.dataframe(agg.sort_values("Rating", ascending=False).round(2))
-    
-st.subheader("Taste Profile Narrative")
-taste_summary = generate_taste_profile(merged, genre_summary, top_dirs, decade_scores)
-st.markdown(taste_summary)
 
-st.markdown("## 🎛️ Recommendation Filters")
+    decade_scores = merged.groupby("Decade")['Rating'].mean().to_dict()
 
-min_rating = st.slider("Minimum Public Rating (out of 5)", 0.0, 5.0, 3.5, 0.1)
-max_year = st.slider("Latest Release Year", 1950, TODAY.year, TODAY.year)
+    st.subheader("Taste Profile Narrative")
+    taste_summary = generate_taste_profile(merged, genre_summary, top_dirs, decade_scores)
+    st.markdown(taste_summary)
 
-st.markdown("## 🎯 Smart Recommendations (Released Films)")
+    st.markdown("## 🎛️ Recommendation Filters")
+    min_rating = st.slider("Minimum Public Rating (out of 5)", 0.0, 5.0, 3.5, 0.1)
+    max_year = st.slider("Latest Release Year", 1950, TODAY.year, TODAY.year)
 
-seen = set(merged['Name'].str.lower())
-scored_recs = []
+    st.markdown("## 🎯 Smart Recommendations (Released Films)")
+    seen = set(merged['Name'].str.lower())
+    scored_recs = []
+    top_genres = genre_summary.sort_values("Your Rating", ascending=False).head(5).index.tolist()
+    genre_ids = [GENRE_NAME_TO_ID.get(g) for g in top_genres if GENRE_NAME_TO_ID.get(g)]
 
-# use top genres and top decades
-top_genres = genre_summary.sort_values("Your Rating", ascending=False).head(5).index.tolist()
-genre_ids = [GENRE_NAME_TO_ID.get(g) for g in top_genres if GENRE_NAME_TO_ID.get(g)]
-
-for gid in genre_ids:
-    url = "https://api.themoviedb.org/3/discover/movie"
-    r = requests.get(url, params={
-        "api_key": TMDB_API_KEY,
-        "with_genres": gid,
-        "sort_by": "vote_average.desc",
-        "vote_count.gte": 50,
-        "primary_release_date.lte": TODAY,
-        "include_adult": "false"
-    })
-    if not r.ok:
-        continue
-    for m in r.json().get("results", []):
-        title = m.get("title", "").strip()
-        if not title or title.lower() in seen:
-            continue
-        if not m.get("release_date") or int(m["release_date"][:4]) > max_year or float(m["vote_average"] or 0) / 2 < min_rating:
-            continue
-        year = int(m["release_date"][:4])
-        decade = score_decade(year)
-        pub_score = float(m.get("vote_average", 0)) / 2  # convert to 5-point scale
-        reason = []
-        if decade in decade_scores:
-            reason.append(f"Matches your {decade}s taste")
-        if gid in genre_ids:
-            genre_name = [k for k, v in GENRE_NAME_TO_ID.items() if v == gid][0]
-            reason.append(f"Top genre: {genre_name}")
-        if pub_score >= 4:
-            reason.append("Critically acclaimed")
-
-        scored_recs.append({
-            "Title": title,
-            "Release Date": m["release_date"],
-            "Public Rating": round(pub_score, 2),
-            "Why": ", ".join(reason)
+    for gid in genre_ids:
+        url = "https://api.themoviedb.org/3/discover/movie"
+        r = requests.get(url, params={
+            "api_key": TMDB_API_KEY,
+            "with_genres": gid,
+            "sort_by": "vote_average.desc",
+            "vote_count.gte": 50,
+            "primary_release_date.lte": TODAY,
+            "include_adult": "false"
         })
+        if not r.ok:
+            continue
+        for m in r.json().get("results", []):
+            title = m.get("title", "").strip()
+            if not title or title.lower() in seen:
+                continue
+            if not m.get("release_date") or int(m["release_date"][:4]) > max_year or float(m["vote_average"] or 0) / 2 < min_rating:
+                continue
+            year = int(m["release_date"][:4])
+            decade = score_decade(year)
+            pub_score = float(m.get("vote_average", 0)) / 2
+            reason = []
+            if decade in decade_scores:
+                reason.append(f"Matches your {decade}s taste")
+            if gid in genre_ids:
+                genre_name = [k for k, v in GENRE_NAME_TO_ID.items() if v == gid][0]
+                reason.append(f"Top genre: {genre_name}")
+            if pub_score >= 4:
+                reason.append("Critically acclaimed")
 
-# Sort and display
-if scored_recs:
-    rec_df = pd.DataFrame(scored_recs).drop_duplicates("Title")
-    rec_df = rec_df.sort_values("Public Rating", ascending=False).head(50)
-    st.dataframe(rec_df.reset_index(drop=True), use_container_width=True, height=600)
+            scored_recs.append({
+                "Title": title,
+                "Release Date": m["release_date"],
+                "Public Rating": round(pub_score, 2),
+                "Why": ", ".join(reason)
+            })
 
-else:
-    st.info("No solid recs found — try uploading a bigger log file.")
+    if scored_recs:
+        rec_df = pd.DataFrame(scored_recs).drop_duplicates("Title")
+        rec_df = rec_df.sort_values("Public Rating", ascending=False).head(50)
+        st.dataframe(rec_df.reset_index(drop=True), use_container_width=True, height=600)
+    else:
+        st.info("No solid recs found — try uploading a bigger log file.")
 
-
-st.subheader("Upcoming Releases (Next 12 Months)")
-for genre in top_genres:
-    genre_id = GENRE_NAME_TO_ID.get(genre)
-    if not genre_id:
-        continue
-    url = "https://api.themoviedb.org/3/discover/movie"
-    r = requests.get(url, params={
-        "api_key": TMDB_API_KEY,
-        "sort_by": "primary_release_date.asc",
-        "primary_release_date.gte": TODAY,
-        "primary_release_date.lte": NEXT_YEAR,
-        "with_genres": genre_id,
-        "include_adult": "false"
-    })
-    if r.ok:
-        data = r.json().get("results", [])
-        filtered = [{"Title": m['title'], "Release Date": m['release_date']} for m in data if m.get("title") and m.get("release_date")]
-        if filtered:
-            st.markdown(f"**Upcoming {genre}**")
-            st.dataframe(pd.DataFrame(filtered[:10]))
-
+    st.subheader("Upcoming Releases (Next 12 Months)")
+    for genre in top_genres:
+        genre_id = GENRE_NAME_TO_ID.get(genre)
+        if not genre_id:
+            continue
+        url = "https://api.themoviedb.org/3/discover/movie"
+        r = requests.get(url, params={
+            "api_key": TMDB_API_KEY,
+            "sort_by": "primary_release_date.asc",
+            "primary_release_date.gte": TODAY,
+            "primary_release_date.lte": NEXT_YEAR,
+            "with_genres": genre_id,
+            "include_adult": "false"
+        })
+        if r.ok:
+            data = r.json().get("results", [])
+            filtered = [{"Title": m['title'], "Release Date": m['release_date']} for m in data if m.get("title") and m.get("release_date")]
+            if filtered:
+                st.markdown(f"**Upcoming {genre}**")
+                st.dataframe(pd.DataFrame(filtered[:10]))
 else:
     st.info("Upload your enriched Letterboxd file to begin.")
-
 
 
 
