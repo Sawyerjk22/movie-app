@@ -172,8 +172,8 @@ if uploaded_file:
     st.markdown("## 🎯 Smart Recommendations (Released Films)")
     seen = set(merged['Name'].str.lower())
     def score_candidate(movie, user_top_genres, user_decades, preferred_certificates):
-    score = 0
-    reason = []
+        score = 0
+        reason = []
 
     title = movie.get("title", "").strip()
     if not title:
