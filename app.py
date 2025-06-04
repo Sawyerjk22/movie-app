@@ -84,6 +84,8 @@ GENRE_NAME_TO_ID = {
     "War": 10752,
     "Western": 37
 }
+EXCLUDED_GENRES = {"TV Movie", "Family"}  # You can add "Animation" if needed
+MIN_VOTE_COUNT = 1000
 
 if uploaded_file:
     df = pd.read_excel(uploaded_file) if uploaded_file.name.endswith("xlsx") else pd.read_csv(uploaded_file)
@@ -117,6 +119,10 @@ if uploaded_file:
 
     merged['Public_Avg_Rating'] = merged['Public_Avg_Rating'] / 2
     merged['Decade'] = merged['Year'].apply(score_decade)
+    # Analyze your preferred age ratings (like PG-13, R, etc.)
+    rating_counts = merged['Certificate'].value_counts()
+    preferred_certificates = rating_counts[rating_counts > 2].index.tolist()
+
 
     st.subheader("Your Rating Distribution (0–10 scale)")
     st.bar_chart(merged['Rating'].value_counts().sort_index())
@@ -165,46 +171,95 @@ if uploaded_file:
 
     st.markdown("## 🎯 Smart Recommendations (Released Films)")
     seen = set(merged['Name'].str.lower())
+    def score_candidate(movie, user_top_genres, user_decades, preferred_certificates):
+    score = 0
+    reason = []
+
+    title = movie.get("title", "").strip()
+    if not title:
+        return None
+
+    vote_count = movie.get("vote_count", 0)
+    pub_rating = float(movie.get("vote_average", 0)) / 2
+    release_date = movie.get("release_date", "")
+    year = int(release_date[:4]) if release_date else 0
+    decade = score_decade(year)
+
+    if vote_count < MIN_VOTE_COUNT or not release_date:
+        return None
+    if pub_rating < min_rating or year > max_year:
+        return None
+
+    # TMDb genre IDs to names
+    genre_ids = movie.get("genre_ids", [])
+    genres = [k for k, v in GENRE_NAME_TO_ID.items() if v in genre_ids]
+    if any(g in EXCLUDED_GENRES for g in genres):
+        return None
+
+    # Genre match
+    match_genres = [g for g in genres if g in user_top_genres]
+    if match_genres:
+        score += 1.5 * len(match_genres)
+        reason.append(f"Top genres: {', '.join(match_genres)}")
+
+    # Decade match
+    if decade in user_decades:
+        score += 1.0
+        reason.append(f"Matches your {decade}s taste")
+
+    # Public acclaim
+    if pub_rating >= 4:
+        score += 1.0
+        reason.append("Critically acclaimed")
+
+    # Certificate match (if TMDb adds it — not guaranteed here)
+    cert = movie.get("certification")
+    if cert and cert in preferred_certificates:
+        score += 0.5
+        reason.append(f"Preferred rating: {cert}")
+
+    return {
+        "Title": title,
+        "Release Date": release_date,
+        "Public Rating": round(pub_rating, 2),
+        "Why": ", ".join(reason),
+        "Score": score
+    }
+
     scored_recs = []
     top_genres = genre_summary.sort_values("Your Rating", ascending=False).head(5).index.tolist()
     genre_ids = [GENRE_NAME_TO_ID.get(g) for g in top_genres if GENRE_NAME_TO_ID.get(g)]
 
-    for gid in genre_ids:
-        url = "https://api.themoviedb.org/3/discover/movie"
-        r = requests.get(url, params={
-            "api_key": TMDB_API_KEY,
-            "with_genres": gid,
-            "sort_by": "vote_average.desc",
-            "vote_count.gte": 50,
-            "primary_release_date.lte": TODAY,
-            "include_adult": "false"
-        })
-        if not r.ok:
-            continue
-        for m in r.json().get("results", []):
-            title = m.get("title", "").strip()
-            if not title or title.lower() in seen:
-                continue
-            if not m.get("release_date") or int(m["release_date"][:4]) > max_year or float(m["vote_average"] or 0) / 2 < min_rating:
-                continue
-            year = int(m["release_date"][:4])
-            decade = score_decade(year)
-            pub_score = float(m.get("vote_average", 0)) / 2
-            reason = []
-            if decade in decade_scores:
-                reason.append(f"Matches your {decade}s taste")
-            if gid in genre_ids:
-                genre_name = [k for k, v in GENRE_NAME_TO_ID.items() if v == gid][0]
-                reason.append(f"Top genre: {genre_name}")
-            if pub_score >= 4:
-                reason.append("Critically acclaimed")
+   scored_recs = []
+seen = set(merged['Name'].str.lower())
+user_decades = set(decade_scores.keys())
 
-            scored_recs.append({
-                "Title": title,
-                "Release Date": m["release_date"],
-                "Public Rating": round(pub_score, 2),
-                "Why": ", ".join(reason)
-            })
+for gid in genre_ids:
+    url = "https://api.themoviedb.org/3/discover/movie"
+    r = requests.get(url, params={
+        "api_key": TMDB_API_KEY,
+        "with_genres": gid,
+        "sort_by": "vote_average.desc",
+        "vote_count.gte": MIN_VOTE_COUNT,
+        "primary_release_date.lte": TODAY,
+        "include_adult": "false"
+    })
+    if not r.ok:
+        continue
+    for m in r.json().get("results", []):
+        if m.get("title", "").lower() in seen:
+            continue
+        scored = score_candidate(m, top_genres, user_decades, preferred_certificates)
+        if scored:
+            scored_recs.append(scored)
+
+# Final display
+if scored_recs:
+    rec_df = pd.DataFrame(scored_recs).sort_values("Score", ascending=False).drop_duplicates("Title")
+    st.dataframe(rec_df[["Title", "Release Date", "Public Rating", "Why"]].reset_index(drop=True), use_container_width=True, height=600)
+else:
+    st.info("No solid recs found — try uploading a bigger log file.")
+
 
     if scored_recs:
         rec_df = pd.DataFrame(scored_recs).drop_duplicates("Title")
