@@ -219,7 +219,7 @@ else:
     st.info("No solid recs found — try uploading a bigger log file.")
 
 
- st.subheader("Upcoming Releases (Next 12 Months)")
+st.subheader("Upcoming Releases (Next 12 Months)")
 for genre in top_genres:
     genre_id = GENRE_NAME_TO_ID.get(genre)
     if not genre_id:
