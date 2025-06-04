@@ -176,7 +176,7 @@ if uploaded_file:
         reason = []
 
     title = movie.get("title", "").strip()
-    if not title:
+       if not title:
         return None
 
     vote_count = movie.get("vote_count", 0)
