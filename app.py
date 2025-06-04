@@ -162,44 +162,60 @@ taste_summary = generate_taste_profile(merged, genre_summary, top_dirs, decade_s
 st.markdown(taste_summary)
 
 
-    st.subheader("🎯 Smart Recommendations (Scored + Explained)")
-    top_genres = genre_summary.head(3).index.tolist()
-    top_directors = top_dirs.head(5).index.tolist()
-    decade_scores = merged.groupby("Decade")['Rating'].mean().to_dict()
+st.subheader("🎯 Smart Recommendations (Released Films)")
 
-    # Scoring loop (placeholder logic)
-    seen = set(merged['Name'].str.lower())
-    scored_recs = []
-    for name in top_directors:
-        r = requests.get("https://api.themoviedb.org/3/search/person", params={"api_key": TMDB_API_KEY, "query": name})
-        if not r.ok or not r.json().get("results"): continue
-        pid = r.json()['results'][0]['id']
-        r2 = requests.get(f"https://api.themoviedb.org/3/person/{pid}/movie_credits", params={"api_key": TMDB_API_KEY})
-        if not r2.ok: continue
-        for m in r2.json().get("crew", []) + r2.json().get("cast", []):
-            title = m.get("title", "").strip()
-            if not title or title.lower() in seen: continue
-            if not m.get("release_date") or m['release_date'] >= str(TODAY): continue
-            score = 0
-            reason = []
-            g = m.get("genre_ids", [])
-            if name in top_directors:
-                score += 2.0
-                reason.append("Favored director")
-            if m.get("vote_average"):
-                score += float(m['vote_average']) / 5
-                reason.append("High TMDb rating")
-            if m.get("release_date"):
-                year = int(m['release_date'][:4])
-                dec = score_decade(year)
-                if dec in decade_scores:
-                    score += (decade_scores[dec] - 5) / 2
-                    reason.append(f"Matches your {dec}s taste")
-            scored_recs.append({"Title": title, "Release Date": m['release_date'], "Score": round(score, 2), "Why": ", ".join(reason)})
+seen = set(merged['Name'].str.lower())
+scored_recs = []
 
-    if scored_recs:
-        top_scored = pd.DataFrame(scored_recs).sort_values("Score", ascending=False).drop_duplicates("Title")
-        st.dataframe(top_scored.head(10))
+# use top genres and top decades
+top_genres = genre_summary.sort_values("Your Rating", ascending=False).head(5).index.tolist()
+genre_ids = [GENRE_NAME_TO_ID.get(g) for g in top_genres if GENRE_NAME_TO_ID.get(g)]
+
+for gid in genre_ids:
+    url = "https://api.themoviedb.org/3/discover/movie"
+    r = requests.get(url, params={
+        "api_key": TMDB_API_KEY,
+        "with_genres": gid,
+        "sort_by": "vote_average.desc",
+        "vote_count.gte": 50,
+        "primary_release_date.lte": TODAY,
+        "include_adult": "false"
+    })
+    if not r.ok:
+        continue
+    for m in r.json().get("results", []):
+        title = m.get("title", "").strip()
+        if not title or title.lower() in seen:
+            continue
+        if not m.get("release_date"):
+            continue
+        year = int(m["release_date"][:4])
+        decade = score_decade(year)
+        pub_score = float(m.get("vote_average", 0)) / 2  # convert to 5-point scale
+        reason = []
+        if decade in decade_scores:
+            reason.append(f"Matches your {decade}s taste")
+        if gid in genre_ids:
+            genre_name = [k for k, v in GENRE_NAME_TO_ID.items() if v == gid][0]
+            reason.append(f"Top genre: {genre_name}")
+        if pub_score >= 4:
+            reason.append("Critically acclaimed")
+
+        scored_recs.append({
+            "Title": title,
+            "Release Date": m["release_date"],
+            "Public Rating": round(pub_score, 2),
+            "Why": ", ".join(reason)
+        })
+
+# Sort and display
+if scored_recs:
+    rec_df = pd.DataFrame(scored_recs).drop_duplicates("Title")
+    rec_df = rec_df.sort_values("Public Rating", ascending=False).head(50)
+    st.dataframe(rec_df)
+else:
+    st.info("No solid recs found — try uploading a bigger log file.")
+
 
  st.subheader("Upcoming Releases (Next 12 Months)")
 for genre in top_genres:
