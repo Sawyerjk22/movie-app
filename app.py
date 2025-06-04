@@ -40,6 +40,55 @@ def score_decade(year):
         return int(y // 10 * 10)
     except:
         return None
+def score_candidate(movie, user_top_genres, user_decades, preferred_certificates):
+    score = 0
+    reason = []
+
+    title = movie.get("title", "").strip()
+    if not title:
+        return None
+
+    vote_count = movie.get("vote_count", 0)
+    pub_rating = float(movie.get("vote_average", 0)) / 2
+    release_date = movie.get("release_date", "")
+    year = int(release_date[:4]) if release_date else 0
+    decade = score_decade(year)
+
+    if vote_count < MIN_VOTE_COUNT or not release_date:
+        return None
+    if pub_rating < min_rating or year > max_year:
+        return None
+
+    genre_ids = movie.get("genre_ids", [])
+    genres = [k for k, v in GENRE_NAME_TO_ID.items() if v in genre_ids]
+    if any(g in EXCLUDED_GENRES for g in genres):
+        return None
+
+    match_genres = [g for g in genres if g in user_top_genres]
+    if match_genres:
+        score += 1.5 * len(match_genres)
+        reason.append(f"Top genres: {', '.join(match_genres)}")
+
+    if decade in user_decades:
+        score += 1.0
+        reason.append(f"Matches your {decade}s taste")
+
+    if pub_rating >= 4:
+        score += 1.0
+        reason.append("Critically acclaimed")
+
+    cert = movie.get("certification")
+    if cert and cert in preferred_certificates:
+        score += 0.5
+        reason.append(f"Preferred rating: {cert}")
+
+    return {
+        "Title": title,
+        "Release Date": release_date,
+        "Public Rating": round(pub_rating, 2),
+        "Why": ", ".join(reason),
+        "Score": score
+    }
 
 def generate_taste_profile(merged, genre_summary, top_dirs, decade_scores):
     top_genres = genre_summary.sort_values("Your Rating", ascending=False).head(3).index.tolist()
@@ -171,13 +220,6 @@ if uploaded_file:
 
     st.markdown("## 🎯 Smart Recommendations (Released Films)")
     seen = set(merged['Name'].str.lower())
-    def score_candidate(movie, user_top_genres, user_decades, preferred_certificates):
-        score = 0
-        reason = []
-
-    title = movie.get("title", "").strip()
-       if not title:
-        return None
 
     vote_count = movie.get("vote_count", 0)
     pub_rating = float(movie.get("vote_average", 0)) / 2
