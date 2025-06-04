@@ -62,6 +62,28 @@ def generate_taste_profile(merged, genre_summary, top_dirs, decade_scores):
 
     return " ".join(parts)
 
+GENRE_NAME_TO_ID = {
+    "Action": 28,
+    "Adventure": 12,
+    "Animation": 16,
+    "Comedy": 35,
+    "Crime": 80,
+    "Documentary": 99,
+    "Drama": 18,
+    "Family": 10751,
+    "Fantasy": 14,
+    "History": 36,
+    "Horror": 27,
+    "Music": 10402,
+    "Mystery": 9648,
+    "Romance": 10749,
+    "Science Fiction": 878,
+    "TV Movie": 10770,
+    "Thriller": 53,
+    "War": 10752,
+    "Western": 37
+}
+
 
 if uploaded_file:
     df = pd.read_excel(uploaded_file) if uploaded_file.name.endswith("xlsx") else pd.read_csv(uploaded_file)
@@ -179,22 +201,27 @@ st.markdown(taste_summary)
         top_scored = pd.DataFrame(scored_recs).sort_values("Score", ascending=False).drop_duplicates("Title")
         st.dataframe(top_scored.head(10))
 
-    st.subheader("Upcoming Releases (Next 12 Months)")
-    for genre in top_genres:
-        url = f"https://api.themoviedb.org/3/discover/movie"
-        r = requests.get(url, params={
-            "api_key": TMDB_API_KEY,
-            "sort_by": "primary_release_date.asc",
-            "primary_release_date.gte": TODAY,
-            "primary_release_date.lte": NEXT_YEAR,
-            "with_keywords": genre
-        })
-        if r.ok:
-            data = r.json().get("results", [])
-            filtered = [{"Title": m['title'], "Release Date": m['release_date']} for m in data if m.get("title") and m.get("release_date")]
-            if filtered:
-                st.markdown(f"**Upcoming: {genre}**")
-                st.dataframe(pd.DataFrame(filtered[:5]))
+ st.subheader("Upcoming Releases (Next 12 Months)")
+for genre in top_genres:
+    genre_id = GENRE_NAME_TO_ID.get(genre)
+    if not genre_id:
+        continue
+    url = "https://api.themoviedb.org/3/discover/movie"
+    r = requests.get(url, params={
+        "api_key": TMDB_API_KEY,
+        "sort_by": "primary_release_date.asc",
+        "primary_release_date.gte": TODAY,
+        "primary_release_date.lte": NEXT_YEAR,
+        "with_genres": genre_id,
+        "include_adult": "false"
+    })
+    if r.ok:
+        data = r.json().get("results", [])
+        filtered = [{"Title": m['title'], "Release Date": m['release_date']} for m in data if m.get("title") and m.get("release_date")]
+        if filtered:
+            st.markdown(f"**Upcoming {genre}**")
+            st.dataframe(pd.DataFrame(filtered[:10]))
+
 else:
     st.info("Upload your enriched Letterboxd file to begin.")
 
