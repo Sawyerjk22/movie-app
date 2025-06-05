@@ -11,6 +11,82 @@ TMDB_API_KEY = "a1d765178f442e9b0677b32ac19d9c68"
 TODAY = datetime.date.today()
 NEXT_YEAR = TODAY + datetime.timedelta(days=365)
 
+st.set_page_config(page_title="Sawyer Movie DNA", layout="wide")
+st.title("🎮 Sawyer Knox Movie DNA & Recommender")
+st.markdown("Upload your enriched Letterboxd export to see stats, recs, and what's new for you.")
+
+uploaded_file = st.file_uploader("Upload your enriched Letterboxd file (Excel or CSV)", type=["xlsx", "csv"])
+
+@st.cache_data
+def load_public_ratings():
+    try:
+        return pd.read_csv("TMDb_Public_Ratings.csv")
+    except FileNotFoundError:
+        return pd.DataFrame(columns=["TMDb ID", "IMDb ID", "Title", "Year", "Public Avg Rating"])
+
+def get_tmdb_rating(imdb_id):
+    url = f"https://api.themoviedb.org/3/find/{imdb_id}"
+    params = {"api_key": TMDB_API_KEY, "external_source": "imdb_id"}
+    r = requests.get(url, params=params)
+    if r.ok:
+        results = r.json().get("movie_results", [])
+        if results:
+            return results[0].get("vote_average", None), results[0].get("id")
+    return None, None
+
+def score_decade(year):
+    try:
+        y = int(year)
+        return int(y // 10 * 10)
+    except:
+        return None
+
+def generate_taste_profile(merged, genre_summary, top_dirs, decade_scores):
+    top_genres = genre_summary.sort_values("Your Rating", ascending=False).head(3).index.tolist()
+    top_decades = sorted(decade_scores.items(), key=lambda x: -x[1])[:2]
+    top_director_names = top_dirs.head(3).index.tolist()
+
+    parts = []
+    if top_genres:
+        parts.append(f"You gravitate toward genres like **{', '.join(top_genres)}**.")
+    if top_decades:
+        parts.append("You especially enjoy films from the " + " and ".join([f"**{int(d)}s**" for d, _ in top_decades]) + ".")
+    if top_director_names:
+        parts.append("Your highest-rated directors include " + ", ".join([f"**{d}**" for d in top_director_names]) + ".")
+    rt_mean = merged['Runtime'].mean()
+    if rt_mean >= 120:
+        parts.append("You don’t mind long runtimes — many of your favorites run over 2 hours.")
+    elif rt_mean <= 90:
+        parts.append("You prefer leaner films — under 90 minutes tends to score best for you.")
+    else:
+        parts.append("You're flexible on runtime, but seem to favor quality over length.")
+
+    return " ".join(parts)
+
+GENRE_NAME_TO_ID = {
+    "Action": 28,
+    "Adventure": 12,
+    "Animation": 16,
+    "Comedy": 35,
+    "Crime": 80,
+    "Documentary": 99,
+    "Drama": 18,
+    "Family": 10751,
+    "Fantasy": 14,
+    "History": 36,
+    "Horror": 27,
+    "Music": 10402,
+    "Mystery": 9648,
+    "Romance": 10749,
+    "Science Fiction": 878,
+    "TV Movie": 10770,
+    "Thriller": 53,
+    "War": 10752,
+    "Western": 37
+}
+EXCLUDED_GENRES = {"TV Movie", "Family"}
+MIN_VOTE_COUNT = 1000
+
 if uploaded_file:
     df = pd.read_excel(uploaded_file) if uploaded_file.name.endswith("xlsx") else pd.read_csv(uploaded_file)
     st.success(f"Loaded {len(df)} movies.")
@@ -110,13 +186,29 @@ if uploaded_file:
         for m in r.json().get("results", []):
             if m.get("title", "").lower() in seen:
                 continue
-            scored = score_candidate(m, top_genres, user_decades, preferred_certificates)
-            if scored:
-                scored_recs.append(scored)
+            pub_rating = float(m.get("vote_average", 0)) / 2
+            release_date = m.get("release_date")
+            if not release_date or int(release_date[:4]) > max_year or pub_rating < min_rating:
+                continue
+            decade = score_decade(int(release_date[:4]))
+            reason = []
+            if decade in user_decades:
+                reason.append(f"Matches your {decade}s taste")
+            genre_name = [k for k, v in GENRE_NAME_TO_ID.items() if v == gid][0]
+            reason.append(f"Top genre: {genre_name}")
+            if pub_rating >= 4:
+                reason.append("Critically acclaimed")
+            scored_recs.append({
+                "Title": m['title'],
+                "Release Date": release_date,
+                "Public Rating": round(pub_rating, 2),
+                "Why": ", ".join(reason)
+            })
 
     if scored_recs:
-        rec_df = pd.DataFrame(scored_recs).sort_values("Score", ascending=False).drop_duplicates("Title")
-        st.dataframe(rec_df[["Title", "Release Date", "Public Rating", "Why"]].reset_index(drop=True), use_container_width=True, height=600)
+        rec_df = pd.DataFrame(scored_recs).drop_duplicates("Title")
+        rec_df = rec_df.sort_values("Public Rating", ascending=False).head(50)
+        st.dataframe(rec_df.reset_index(drop=True), use_container_width=True, height=600)
     else:
         st.info("No solid recs found — try uploading a bigger log file.")
 
