@@ -121,7 +121,7 @@ if uploaded_file:
     merged['Decade'] = merged['Year'].apply(score_decade)
     if 'Certificate' in merged.columns:
         rating_counts = merged['Certificate'].value_counts()
-        preferred_certificates = rating_counts[rating_counts > 2].index.tolist()
+        # moved inside 'if' block to prevent NameError
     else:
         preferred_certificates = []
     preferred_certificates = rating_counts[rating_counts > 2].index.tolist()
