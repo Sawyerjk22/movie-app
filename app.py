@@ -122,6 +122,8 @@ if uploaded_file:
     if 'Certificate' in merged.columns:
         rating_counts = merged['Certificate'].value_counts()
         # already handled inside if block above
+else:
+    preferred_certificates = []
     else:
         preferred_certificates = []
     preferred_certificates = rating_counts[rating_counts > 2].index.tolist()
