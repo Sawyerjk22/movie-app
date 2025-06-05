@@ -122,7 +122,7 @@ if uploaded_file:
     if 'Certificate' in merged.columns:
         rating_counts = merged['Certificate'].value_counts()
         preferred_certificates = rating_counts[rating_counts > 2].index.tolist()
-else:
+        else:
         preferred_certificates = []
 
     st.subheader("Your Rating Distribution (0–10 scale)")
@@ -237,6 +237,7 @@ else:
                 st.dataframe(pd.DataFrame(filtered[:10]))
 else:
     st.info("Upload your enriched Letterboxd file to begin.")
+
 
 
 
