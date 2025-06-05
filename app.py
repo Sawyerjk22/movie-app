@@ -84,8 +84,6 @@ GENRE_NAME_TO_ID = {
     "War": 10752,
     "Western": 37
 }
-EXCLUDED_GENRES = {"TV Movie", "Family"}
-MIN_VOTE_COUNT = 1000
 
 if uploaded_file:
     df = pd.read_excel(uploaded_file) if uploaded_file.name.endswith("xlsx") else pd.read_csv(uploaded_file)
@@ -119,11 +117,6 @@ if uploaded_file:
 
     merged['Public_Avg_Rating'] = merged['Public_Avg_Rating'] / 2
     merged['Decade'] = merged['Year'].apply(score_decade)
-    if 'Certificate' in merged.columns:
-        rating_counts = merged['Certificate'].value_counts()
-        preferred_certificates = rating_counts[rating_counts > 2].index.tolist()
-        else:
-        preferred_certificates = []
 
     st.subheader("Your Rating Distribution (0–10 scale)")
     st.bar_chart(merged['Rating'].value_counts().sort_index())
@@ -139,8 +132,9 @@ if uploaded_file:
     st.dataframe(genre_summary.sort_values("Your Rating", ascending=False))
 
     st.subheader("Top-Rated Directors (min 2 films)")
+    dir_ratings = merged.dropna(subset=['Rating', 'Director'])
     dir_rows = []
-    for _, row in merged.dropna(subset=['Rating', 'Director']).iterrows():
+    for _, row in dir_ratings.iterrows():
         for d in str(row['Director']).split(', '):
             dir_rows.append({"Director": d, "Rating": row['Rating']})
     dir_df = pd.DataFrame(dir_rows)
@@ -160,19 +154,20 @@ if uploaded_file:
     st.dataframe(agg.sort_values("Rating", ascending=False).round(2))
 
     decade_scores = merged.groupby("Decade")['Rating'].mean().to_dict()
+
     st.subheader("Taste Profile Narrative")
-    st.markdown(generate_taste_profile(merged, genre_summary, top_dirs, decade_scores))
+    taste_summary = generate_taste_profile(merged, genre_summary, top_dirs, decade_scores)
+    st.markdown(taste_summary)
 
     st.markdown("## 🎛️ Recommendation Filters")
     min_rating = st.slider("Minimum Public Rating (out of 5)", 0.0, 5.0, 3.5, 0.1)
     max_year = st.slider("Latest Release Year", 1950, TODAY.year, TODAY.year)
 
     st.markdown("## 🎯 Smart Recommendations (Released Films)")
-    top_genres = genre_summary.sort_values("Your Rating", ascending=False).head(5).index.tolist()
-    genre_ids = [GENRE_NAME_TO_ID.get(g) for g in top_genres if GENRE_NAME_TO_ID.get(g)]
-    user_decades = set(decade_scores.keys())
     seen = set(merged['Name'].str.lower())
     scored_recs = []
+    top_genres = genre_summary.sort_values("Your Rating", ascending=False).head(5).index.tolist()
+    genre_ids = [GENRE_NAME_TO_ID.get(g) for g in top_genres if GENRE_NAME_TO_ID.get(g)]
 
     for gid in genre_ids:
         url = "https://api.themoviedb.org/3/discover/movie"
@@ -180,31 +175,34 @@ if uploaded_file:
             "api_key": TMDB_API_KEY,
             "with_genres": gid,
             "sort_by": "vote_average.desc",
-            "vote_count.gte": MIN_VOTE_COUNT,
+            "vote_count.gte": 50,
             "primary_release_date.lte": TODAY,
             "include_adult": "false"
         })
         if not r.ok:
             continue
         for m in r.json().get("results", []):
-            if m.get("title", "").lower() in seen:
+            title = m.get("title", "").strip()
+            if not title or title.lower() in seen:
                 continue
-            pub_rating = float(m.get("vote_average", 0)) / 2
-            release_date = m.get("release_date")
-            if not release_date or int(release_date[:4]) > max_year or pub_rating < min_rating:
+            if not m.get("release_date") or int(m["release_date"][:4]) > max_year or float(m["vote_average"] or 0) / 2 < min_rating:
                 continue
-            decade = score_decade(int(release_date[:4]))
+            year = int(m["release_date"][:4])
+            decade = score_decade(year)
+            pub_score = float(m.get("vote_average", 0)) / 2
             reason = []
-            if decade in user_decades:
+            if decade in decade_scores:
                 reason.append(f"Matches your {decade}s taste")
-            genre_name = [k for k, v in GENRE_NAME_TO_ID.items() if v == gid][0]
-            reason.append(f"Top genre: {genre_name}")
-            if pub_rating >= 4:
+            if gid in genre_ids:
+                genre_name = [k for k, v in GENRE_NAME_TO_ID.items() if v == gid][0]
+                reason.append(f"Top genre: {genre_name}")
+            if pub_score >= 4:
                 reason.append("Critically acclaimed")
+
             scored_recs.append({
-                "Title": m['title'],
-                "Release Date": release_date,
-                "Public Rating": round(pub_rating, 2),
+                "Title": title,
+                "Release Date": m["release_date"],
+                "Public Rating": round(pub_score, 2),
                 "Why": ", ".join(reason)
             })
 
