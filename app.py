@@ -121,7 +121,7 @@ if uploaded_file:
     merged['Decade'] = merged['Year'].apply(score_decade)
     if 'Certificate' in merged.columns:
         rating_counts = merged['Certificate'].value_counts()
-        # moved inside 'if' block to prevent NameError
+        # already handled inside if block above
     else:
         preferred_certificates = []
     preferred_certificates = rating_counts[rating_counts > 2].index.tolist()
@@ -238,6 +238,7 @@ if uploaded_file:
                 st.dataframe(pd.DataFrame(filtered[:10]))
 else:
     st.info("Upload your enriched Letterboxd file to begin.")
+
 
 
 
