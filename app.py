@@ -122,10 +122,8 @@ if uploaded_file:
     if 'Certificate' in merged.columns:
         rating_counts = merged['Certificate'].value_counts()
         preferred_certificates = rating_counts[rating_counts > 2].index.tolist()
-    
-    else:
+else:
         preferred_certificates = []
-    preferred_certificates = rating_counts[rating_counts > 2].index.tolist()
 
     st.subheader("Your Rating Distribution (0–10 scale)")
     st.bar_chart(merged['Rating'].value_counts().sort_index())
