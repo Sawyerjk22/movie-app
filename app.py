@@ -1,6 +1,15 @@
 # Sawyer's Upgraded Movie DNA App (v5+) - Intelligent Recommender + Taste Analysis
 
-<previous code preserved>
+import streamlit as st
+import pandas as pd
+import requests
+import datetime
+from time import sleep
+import os
+
+TMDB_API_KEY = "a1d765178f442e9b0677b32ac19d9c68"
+TODAY = datetime.date.today()
+NEXT_YEAR = TODAY + datetime.timedelta(days=365)
 
 if uploaded_file:
     df = pd.read_excel(uploaded_file) if uploaded_file.name.endswith("xlsx") else pd.read_csv(uploaded_file)
@@ -133,6 +142,7 @@ if uploaded_file:
                 st.dataframe(pd.DataFrame(filtered[:10]))
 else:
     st.info("Upload your enriched Letterboxd file to begin.")
+
 
 
 
